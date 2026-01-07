@@ -1,24 +1,89 @@
-// Import necessary hooks and functions from React.
-import { useContext, useReducer, createContext } from "react";
-import storeReducer, { initialStore } from "../store"  // Import the reducer and the initial state.
+import React, { createContext, useContext, useReducer, useEffect } from "react";
+export const Context = createContext(null);
+const initialState = { contacts: [] };
 
-// Create a context to hold the global state of the application
-// We will call this global state the "store" to avoid confusion while using local states
-const StoreContext = createContext()
+const reducer = (state, action) => {
+  switch (action.type) {
+    case "SET_CONTACTS":
+      return { ...state, contacts: action.payload };
+    default:
+      return state;
+  }
+};
 
-// Define a provider component that encapsulates the store and warps it in a context provider to 
-// broadcast the information throught all the app pages and components.
-export function StoreProvider({ children }) {
-    // Initialize reducer with the initial state.
-    const [store, dispatch] = useReducer(storeReducer, initialStore())
-    // Provide the store and dispatch method to all child components.
-    return <StoreContext.Provider value={{ store, dispatch }}>
-        {children}
-    </StoreContext.Provider>
-}
+export const StoreProvider = ({ children }) => {
+  const [store, dispatch] = useReducer(reducer, initialState);
 
-// Custom hook to access the global state and dispatch function.
-export default function useGlobalReducer() {
-    const { dispatch, store } = useContext(StoreContext)
-    return { dispatch, store };
-}
+  const AGENDA = "agenda_de_estudiante_pro_2024"; 
+  const BASE_URL = "https://playground.4geeks.com/contact";
+
+  const getContacts = async () => {
+    try {
+      const resp = await fetch(`${BASE_URL}/agendas/${AGENDA}/contacts`);
+      if (resp.status === 404) {
+        await createAgenda();
+      } else if (resp.ok) {
+        const data = await resp.json();
+        dispatch({ type: "SET_CONTACTS", payload: data.contacts || [] });
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const createAgenda = async () => {
+    try {
+      const resp = await fetch(`${BASE_URL}/agendas/${AGENDA}`, { method: "POST" });
+      if (resp.ok) getContacts();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const addContact = async (contact) => {
+    try {
+      const resp = await fetch(`${BASE_URL}/agendas/${AGENDA}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contact)
+      });
+      if (resp.ok) await getContacts();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const updateContact = async (id, contact) => {
+    try {
+      const resp = await fetch(`${BASE_URL}/agendas/${AGENDA}/contacts/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(contact)
+      });
+      if (resp.ok) await getContacts();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const deleteContact = async (id) => {
+    try {
+      const resp = await fetch(`${BASE_URL}/agendas/${AGENDA}/contacts/${id}`, { method: "DELETE" });
+      if (resp.ok) await getContacts();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    getContacts();
+  }, []);
+
+  return (
+    <Context.Provider value={{ store, actions: { getContacts, addContact, updateContact, deleteContact } }}>
+      {children}
+    </Context.Provider>
+  );
+};
+
+export const useStore = () => useContext(Context);
